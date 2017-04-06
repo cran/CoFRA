@@ -2,7 +2,7 @@
 % Please edit documentation in R/CoFRA.R
 \name{getFunctionalCategories}
 \alias{getFunctionalCategories}
-\title{get data frame with functional categories}
+\title{get named vector with functional categories}
 \usage{
 getFunctionalCategories(func = "CC")
 }
@@ -10,7 +10,7 @@ getFunctionalCategories(func = "CC")
 \item{func}{string ("BP","CC","MF")}
 }
 \description{
-get data frame with functional categories
+get named vector with functional categories
 }
 \examples{
 library(CoFRA)

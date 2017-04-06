@@ -1,28 +1,23 @@
-#require("gplots")
-#require("grid")
-#.onLoad <- function(libname, pkgname) {
-#data(sysdata, package=pkgname, envir=parent.env(environment()))
-#}
-#data(BP, envir=environment())
-#data(MF, envir=environment())
-#data(CC, envir=environment())
-#data("R/sysdata.rda", envir=environment())
 
-
-#'  get data frame with functional categories
+#'  get named vector with functional categories
 #' @param func string ("BP","CC","MF")
 #' @keywords Gene ontology
 #' @examples
 #' library(CoFRA)
 #' Acc=getFunctionalCategories(func="CC")
 #' @export
-getFunctionalCategories <- function(func="CC"){
-if (func=="BP"){funcU=BP}
-if (func=="CC"){funcU=CC}
-if (func=="MF"){funcU=MF}
-return(funcU) # invisible()
+getFunctionalCategories <- function(func = "CC") {
+if (func == "BP") {
+funcU = BP
 }
-
+if (func == "CC") {
+funcU = CC
+}
+if (func == "MF") {
+funcU = MF
+}
+return(funcU)  # invisible()
+}
 
 
 #' This function filter a data frame on column named "pro"
@@ -35,33 +30,47 @@ return(funcU) # invisible()
 #' iBAQ2=filterData(iBAQ,">CON") # filter headers starting with >CON
 #' @export
 filterData <- function(dfPro,filter){
+if (base::is.data.frame(dfPro)==F)
+{
+stop("Data frame expected for dfPro")
+}
+if (length(which(names(dfPro)=="pro"))==0)
+{
+stop("Column named 'pro' expected")
+}
+if (base::is.character(filter)==F)
+{
+stop("Character expected for filter")
+}
+
 li="("
 for (i in 1:length(filter)){
-if (i!=length(filter)){li=paste(li,"^(",filter[i],")|",sep="")}
-if (i==length(filter)){li=paste(li,"^(",filter[i],"))",sep="")}
+if (i!=length(filter)) {
+li=paste(li,"^(",filter[i],")|",sep="")
+}
+if (i==length(filter)) {
+li=paste(li,"^(",filter[i],"))",sep="")}
 }
 sel=grep(li, dfPro$pro,invert = T)
 res=dfPro[sel,]
 return(res)
 }
 
-mapAc2Func <- function(AcList,funcDF,NbackGround=142140){
-res=data.frame(Cat=funcDF[,1],NumberOfMatch=rep(0,nrow(funcDF)),NumberInCat=rep(0,nrow(funcDF)),Genes=rep("",nrow(funcDF)),Pvalue=rep(1,nrow(funcDF)),RelativeEnrichment=rep(0,nrow(funcDF)),stringsAsFactors =F)
-for (i in 1:nrow(funcDF)){
-tmp=unlist(strsplit(funcDF[i,"Ac"]," "))
-tmp=tmp[tmp!=""]
-if (length(tmp)>0){
-mat=intersect(AcList,tmp)
-res[i,"NumberOfMatch"]=length(mat)
-#print(paste(mat, collapse=" "))
-res[i,"Genes"]=paste(mat, collapse=" ")
-#print(res[i,"Genes"])
-res[i,"NumberInCat"]=length(tmp)
-res[i,"Pvalue"]=1-stats::phyper(length(mat),length(tmp),NbackGround-length(tmp),length(AcList))
-res[i,"RelativeEnrichment"]=length(mat)/length(tmp)
+
+phyperSets <- function(Query,Ref,Nbackground){
+NumberOfMatch=length(base::intersect(Query,Ref))
+NumberInCat=length(Ref)
+res=data.frame(NumberOfMatch=NumberOfMatch,NumberInCat=NumberInCat,Genes=paste(base::intersect(Query,Ref),collapse=" "),Pvalue=1-stats::phyper(NumberOfMatch,NumberInCat,Nbackground-NumberInCat,length(Query)))
+return(res) 
 }
-}
-#print(paste(res$Pvalue,res$Genes))
+
+
+mapAc2Func <- function(AcList,funcL,NbackGround=length(unique(unlist(funcL)))){
+#
+vecL=lapply(funcL,phyperSets,Query=AcList,Nbackground=NbackGround)
+res=base::as.data.frame(base::do.call(base::rbind, vecL))
+res$Cat=base::rownames(res)
+#
 res$FDR=stats::p.adjust(res$Pvalue,"fdr")
 res$holm=stats::p.adjust(res$Pvalue,"holm")
 res$BH=stats::p.adjust(res$Pvalue,"BH")
@@ -70,30 +79,62 @@ res=res[order(res$Pvalue),]
 return(res)
 }
 
-
-functionalAnalysisOfAcListOfList <- function(AcL,funcDF,TopProteins=1000,Max=100,NbackGround=142140,MinHits=10,FDR=0.000001){
-res=list()
-for (i in 1:length(AcL)){
-if (TopProteins>0){
-res[[length(res)+1]]=mapAc2Func(AcL[[i]][1:TopProteins],funcDF,NbackGround)
+functionalAnalysisOfAcList <- function(Ac,funcL,TopProteins=1000,Max=100,
+NbackGround=length(unique(unlist(funcL))),MinHits=10,FDR=0.000001){
+if (TopProteins>0)
+{
+res=mapAc2Func(Ac[1:TopProteins],funcL,NbackGround)
 } else {
-res[[length(res)+1]]=mapAc2Func(AcL[[i]],funcDF,NbackGround)
+res=mapAc2Func(Ac,funcL,NbackGround)
 }
-names(res)[i]=names(AcL)[i]
-if (MinHits<=0){
+#names(res)=names(Ac)
+if (MinHits<=0)
+{
 if (Max>0){
-res[[i]]=res[[i]][1:Max,]
+res=res[1:Max,]
 }
 } else {
 if (FDR>0) {
-res[[i]]=res[[i]][res[[i]]$"NumberOfMatch">MinHits & res[[i]]$"FDR"<FDR,]} else {res[[i]]=res[[i]][res[[i]]$"NumberOfMatch">MinHits,]}
+res=res[res$"NumberOfMatch">MinHits & res$"FDR"<FDR,]
+} else {
+res=res[res$"NumberOfMatch">MinHits,]
 }
 }
 return(res)
 }
 
+functionalAnalysisOfAcListOfList <- function(AcL,funcL,TopProteins=1000,Max=100,
+NbackGround=length(unique(unlist(funcL))),MinHits=10,FDR=0.000001,no_cores=-1){ 
+if (no_cores>-1){
+e=new.env()
+e$funcL=funcL
+e$TopProteins=TopProteins
+e$Max=Max
+e$NbackGround=NbackGround
+e$MinHits=MinHits
+e$FDR=FDR
+e$mapAc2Func=mapAc2Func
+e$phyperSets=phyperSets
+if (no_cores==0){
+no_cores <- parallel::detectCores()-1
+}
+# Initiate cluster
+cl <- parallel::makeCluster(no_cores)
+parallel::clusterEvalQ(cl, library(stats))
+parallel::clusterExport(cl,varlist=c("AcL","funcL","TopProteins","Max",
+"NbackGround","MinHits","FDR","mapAc2Func","phyperSets"),envir =e) 
+res=parallel::parLapply(cl,AcL,functionalAnalysisOfAcList,funcL=funcL,
+TopProteins=TopProteins,Max=Max,NbackGround=NbackGround,MinHits=MinHits,FDR=FDR) 
+parallel::stopCluster(cl)} else {
+res=lapply(AcL,functionalAnalysisOfAcList,funcL=funcL,TopProteins=TopProteins,Max=Max,NbackGround=NbackGround,MinHits=MinHits,FDR=FDR)
+}
+#
+return(res)
+}
 
-EnrichmentAnalysisFromDFcompleteAnnotation <- function(df,funcDF,Fac,DFcompare,NbackGround=142140){
+
+
+EnrichmentAnalysisFromDFcompleteAnnotation <- function(df,funcL,Fac,DFcompare,NbackGround=length(unique(unlist(funcL))),no_cores=-1){
 ProL=list()
 for (i in 1:nrow(DFcompare)){
 if (gregexpr(",",DFcompare[i,1])[[1]][1]==-1){
@@ -121,11 +162,14 @@ dfSub=df[,idxL]
 sel=apply(dfSub,1,max)>0
 #
 pro=df$pro[sel]
-ProL[[length(ProL)+1]]=ssLC(1,2,pro,"|") #
+if (stringr::str_count(pro, "\\|")[1]>=2){
+pro=lapply(stringr::str_split(pro,"\\|"),'[[',2)
+}
+ProL[[length(ProL)+1]]=pro #
 names(ProL)[length(ProL)]=paste(DFcompare[i,2]," vs ",DFcompare[i,1])
 }
 # enrichment
-res=functionalAnalysisOfAcListOfList(ProL,funcDF,TopProteins=-1,Max=-1,NbackGround=NbackGround,MinHits=-1)
+res=functionalAnalysisOfAcListOfList(ProL,funcL,TopProteins=-1,Max=-1,NbackGround=NbackGround,MinHits=-1,no_cores=no_cores)
 return(res)
 }
 
@@ -153,57 +197,33 @@ t.testPvalue <- function(...) {
 obj<-try(stats::t.test(...), silent=TRUE)
 if (methods::is(obj, "try-error")) return(NA) else return(obj$p.value)}
 
+wilcox.testPvalue  <- function(...) {
+obj<-try(wilcox.test(...), silent=TRUE)
+if (is(obj, "try-error")) return(NA) else return(obj$p.value)}
 
-
-TtestAndLogRatiosStatCompare <- function(df,funcDF,Fac,DFcompare,ColNorm=T){
-df[,1:length(Fac)]=do.call(data.frame,lapply(df[,1:length(Fac)], function(x) replace(x, is.infinite(x),NA)))
-df[is.na(df)]=max(df[,1:length(Fac)],na.rm =T)
-df[,1:length(Fac)]=log2(df[,1:length(Fac)]+1)
-if (ColNorm==T){
-colSumL=colSums(df[,1:length(Fac)])
-MaxColSum=max(colSumL)
-colSumL=colSumL/MaxColSum
-}
-rownames(df)=ssLC(1,2,df$pro,"|")
-print("Row names assigned")
-res=matrix(1,nrow=nrow(funcDF),ncol=nrow(DFcompare))
-res2=matrix(1,nrow=nrow(funcDF),ncol=nrow(DFcompare))
-res3=matrix(1,nrow=nrow(funcDF),ncol=nrow(DFcompare))
-res4=matrix(1,nrow=nrow(funcDF),ncol=nrow(DFcompare))
-res5=matrix(1,nrow=nrow(funcDF),ncol=nrow(DFcompare))
-for (j in 1:nrow(funcDF)){ # 
-tmp=unlist(strsplit(funcDF[j,"Ac"]," "))
-tmp=tmp[tmp!=""]
-if (length(tmp)>0){
+TtestAndLogRatioForOneCategory <- function(Func,df,Fac,DFcompare,Test="t.test"){
+tmp=Func;tmp=tmp[tmp!=""]
+if (length(tmp)>0) {
 dfSub=as.matrix(df[rownames(df) %in% tmp,1:length(Fac)])
-if (ColNorm==T){
-dfSub=sweep(dfSub,MARGIN=2,colSumL,"/")
-}
-#print("Matrix trasformations done")
+# compare with tests
+res=list(res=c(),res2=c(),res3=c(),res4=c())
 for (i in 1:nrow(DFcompare)){
 #
 if (gregexpr(",",DFcompare[i,1])[[1]][1]==-1){
 idxL1=which(DFcompare[i,1]==as.character(Fac))
 idxL2=which(DFcompare[i,2]==as.character(Fac))
 } else {
+# merge samples groups
 tmp=unlist(strsplit(DFcompare[i,1],","))
 idxL1=c()
 for (l in 2:length(tmp)){
-# print(tmp[l])
 idxL1=append(idxL1,which(tmp[l]==as.character(Fac)))
-}
-if (j==nrow(funcDF)){
-DFcompare[i,1]=tmp[1]
 }
 #
 tmp=unlist(strsplit(DFcompare[i,2],","))
-# print(length(tmp))
 idxL2=c()
 for (l in 2:length(tmp)){
 idxL2=append(idxL2,which(tmp[l]==as.character(Fac)))
-}
-if (j==nrow(funcDF)){
-DFcompare[i,2]=tmp[1]
 }
 #
 }
@@ -211,7 +231,7 @@ DFcompare[i,2]=tmp[1]
 Nsub=0
 if (!is.null(dfSub)){
 if (nrow(dfSub)>0){
-dfSubC1=dfSub[,idxL1,drop=FALSE] # this does not drop the dimension
+dfSubC1=dfSub[,idxL1,drop=FALSE] 
 for (k in 1:nrow(dfSubC1)){
 ok=F
 for (m in 1:ncol(dfSubC1)){
@@ -219,8 +239,13 @@ if (dfSubC1[k,m]>0){ok=T;break}
 }
 if (ok==T){Nsub=Nsub+1}
 }
-res3[j,i]=Nsub
+}
+}
+#res3[j,i]=Nsub
+res[["res3"]]=append(res[["res3"]],Nsub)
 #
+if (!is.null(dfSub)){
+if (nrow(dfSub)>0){
 dfSubC2=dfSub[,idxL2,drop=FALSE]
 Nsub=0
 for (k in 1:nrow(dfSubC2)){
@@ -232,43 +257,108 @@ if (ok==T){Nsub=Nsub+1}
 }
 }
 }
-res4[j,i]=Nsub
+#res4[j,i]=Nsub
+res[["res4"]]=append(res[["res4"]],Nsub)
 # end counts
 Con=mean(as.vector(dfSub[,idxL1]))
 Tre=mean(as.vector(dfSub[,idxL2]))
-res2[j,i]=Tre-Con
+#res2[j,i]=Tre-Con
+res[["res2"]]=append(res[["res2"]],Tre-Con)
+if (Test=="t.test"){
 Pvalue=t.testPvalue(as.vector(dfSub[,idxL1]),as.vector(dfSub[,idxL2]),paired=TRUE) # paired since same group of proteins from two different conditions
+} else {
+Pvalue=wilcox.testPvalue(as.vector(dfSub[,idxL1]),as.vector(dfSub[,idxL2]),paired=TRUE) # paired since same group of proteins from two different conditions
+}
 if (is.na(Pvalue)==T){
-res[j,i]=0
+#res[j,i]=0
+res[["res"]]=append(res[["res"]],0)
 } else {
 if (Tre>=Con){
-res[j,i]=1-Pvalue
+#res[j,i]=1-Pvalue
+res[["res"]]=append(res[["res"]],1-Pvalue)
 } else {
-res[j,i]=Pvalue-1
+#res[j,i]=Pvalue-1
+res[["res"]]=append(res[["res"]],Pvalue-1)
 }
 }
 }
 }
+return(res)
 }
+
+
+
+TtestAndLogRatiosStatCompare2 <- function(df,funcL,Fac,DFcompare,ColNorm=T,Test="t.test",no_cores=no_cores){
+df[,1:length(Fac)]=do.call(data.frame,lapply(df[,1:length(Fac)], function(x) replace(x, is.infinite(x),NA)))
+df[is.na(df)]=max(df[,1:length(Fac)],na.rm =T)
+df[,1:length(Fac)]=log2(df[,1:length(Fac)]+1)
+if (ColNorm==T){
+colSumL=colSums(df[,1:length(Fac)])
+MaxColSum=max(colSumL)
+colSumL=colSumL/MaxColSum
+}
+pro=df$pro
+if (stringr::str_count(pro, "\\|")[1]>=2){
+pro=lapply(stringr::str_split(pro,"\\|"),'[[',2)}
+rownames(df)=pro
+print("Row names assigned")
+if (ColNorm==T){
+df[,1:length(Fac)]=sweep(df[,1:length(Fac)],MARGIN=2,colSumL,"/")
+}
+res5=matrix(1,nrow=length(funcL),ncol=nrow(DFcompare))
+# compare over all categories
+if (no_cores==-1){
+resT=lapply(funcL,TtestAndLogRatioForOneCategory,df=df,Fac=Fac,DFcompare=DFcompare,Test=Test)
+}
+if (no_cores>-1){
+e=new.env()
+e$funcL=funcL
+e$df=df
+e$Fac=Fac
+e$DFcompare=DFcompare
+e$Test=Test
+e$t.testPvalue=t.testPvalue
+e$wilcox.testPvalue=wilcox.testPvalue
+if (no_cores==0){
+no_cores <- parallel::detectCores()-1
+}
+# Initiate cluster
+cl <- parallel::makeCluster(no_cores)
+parallel::clusterEvalQ(cl, library(stats))
+parallel::clusterExport(cl,varlist=c("funcL","df","Fac","DFcompare",
+"Test","t.testPvalue","wilcox.testPvalue"),envir =e) 
+resT=parallel::parLapply(cl,funcL,TtestAndLogRatioForOneCategory,df=df,Fac=Fac,DFcompare=DFcompare,Test=Test)
+parallel::stopCluster(cl)
+}
+res=lapply(resT,'[[',"res")
+res=as.data.frame(do.call(rbind, res))
+res2=lapply(resT,'[[',"res2");res2=as.data.frame(do.call(rbind, res2))
+#print(lapply(resT,'[[',"res3"))
+res3=lapply(resT,'[[',"res3");res3=as.data.frame(do.call(rbind, res3))
+res4=lapply(resT,'[[',"res4");res4=as.data.frame(do.call(rbind, res4))
+#
+# end over categories
 res=as.data.frame(res)
 lev=c()
 for (i in 1:nrow(DFcompare)){
-lev=append(lev,paste(DFcompare[i,2],DFcompare[i,1],sep=" vs "))
+if (gregexpr(",",DFcompare[i,1])[[1]][1]==-1){
+lev=append(lev,paste(DFcompare[i,2],DFcompare[i,1],sep=" vs "))} else {
+lev=append(lev,paste(unlist(strsplit(DFcompare[i,2],","))[1],
+unlist(strsplit(DFcompare[i,1],","))[1],sep=" vs "))
+}
 }
 names(res)=lev
-rownames(res)=funcDF[,1]
+rownames(res)=names(funcL) # funcDF[,1]
 # print(res2)
 res2=as.data.frame(res2)
 names(res2)=lev
-rownames(res2)=funcDF[,1]
+rownames(res2)=names(funcL) # funcDF[,1]
 #
 res3=as.data.frame(res3)
 res4=as.data.frame(res4)
-rownames(res3)=funcDF[,1]
-rownames(res4)=funcDF[,1]
-#print(lev)
+rownames(res3)=names(funcL) # funcDF[,1]
+rownames(res4)=names(funcL) # funcDF[,1]
 names(res3)=lev
-#print(names(res3))
 names(res4)=lev
 # max of res3 and res4
 for (i in 1:ncol(res3)){
@@ -278,7 +368,7 @@ res5[j,i]=max(res3[j,i],res4[j,i])
 }
 res5=as.data.frame(res5)
 names(res5)=lev
-rownames(res5)=funcDF[,1]
+rownames(res5)=names(funcL) # funcDF[,1]
 #
 res=list(res,res2,res3,res4,res5)
 #
@@ -286,10 +376,10 @@ names(res)=c("P value","log ratios","Counts1","Counts2","MaxCounts")
 return(res)
 }
 
+
 filterUpDownPvalue <- function(df){
 dFrame=TRUE
 if (class(df)=="list"){
-#print("ok")
 dFrame=FALSE
 dfA=df
 df=df[[1]]
@@ -324,18 +414,15 @@ tes=(any(as.numeric(df[i,])<(-0.95)) & any(as.numeric(dfA[[2]][i,])<=-1)) | (any
 sel=append(sel,tes)
 }
 if (dFrame==TRUE){
-# print("ok")
 res=df[sel,]
 }
 if (dFrame==FALSE){
-# print("ok")
 res=list()
 res[[length(res)+1]]=df[sel,]
 res[[length(res)+1]]=dfA[[2]][sel,]
 res[[length(res)+1]]=dfA[[3]][sel,]
 res[[length(res)+1]]=dfA[[4]][sel,]
 res[[length(res)+1]]=dfA[[5]][sel,]
-#res=list(Pvalue=df[sel,],LogRatio=dfA[[2]][sel,])
 }
 names(res)=c("P values","log ratios","Counts1","Counts2","Max Counts")
 return(res)
@@ -379,7 +466,7 @@ return(res)
 AddEnrichmentSignificanceTodfLresult <- function(dfL,dfEnrichment){
 res=matrix(0,nrow=nrow(dfL[[1]]),ncol=ncol(dfL[[1]]))
 for (i in 1:nrow(dfL[[1]])){
-idx=which(rownames(dfL[[2]])[i]==rownames(dfEnrichment)) # dfL[[2]] has original rownames
+idx=which(rownames(dfL[[2]])[i]==rownames(dfEnrichment))
 res[i,]=as.numeric(dfEnrichment[idx,])
 }
 # create df
@@ -394,15 +481,13 @@ return(res)
 
 CombineMaxCountWithEnrcihmentSignificance <- function(dfL,ThresholdCount=2){
 res=dfL[["Max Counts"]]
-# now add significance as *
-dfS=dfL[["Significance of enrichment"]]
+dfS=dfL[["Significance of enrichment"]] # now add significance as *
 for (i in 1:nrow(res)){
 for (j in 1:ncol(res)){
 if (dfS[i,j]<0.05 & dfL[["Max Counts"]][i,j]>ThresholdCount){res[i,j]=paste(res[i,j],"*",sep="")}
 }
 }
-# add to dfL
-dfL[[length(dfL)+1]]=res
+dfL[[length(dfL)+1]]=res # add to dfL
 names(dfL)[length(dfL)]="Significance of enrichment combined with max count"
 res=dfL
 return(res)
@@ -417,6 +502,8 @@ return(res)
 #' @param NbackGround integer number of total proteins
 #' @param DataExtract string which P value correction to use
 #' @param minCounts integer minimum number of matching genes for functional category
+#' @param Test "t.test" or "wilcox.test"
+#' @param no_cores =-1 (no parelle execution) =0 (number of availble cores -1) >0 (use number of cores)
 #' @keywords heatmap
 #' @examples
 #' library(CoFRA)
@@ -426,23 +513,36 @@ return(res)
 #' dfComp=data.frame(Con=c("MCCT","MT","MC","iN","sN","AllC,MCCT,MT,MC,iN,sN"),Tre=c("MCCTT","MTT",
 #' "MCT","iNT","sNT","AllT,MCCTT,MTT,MCT,iNT,sNT"))
 #' Func=CoFRA::getFunctionalCategories("CC")
-#' str(Func)
-#' CC1=CoFRA::completeFunctionalRegulationAnalysis(iBAQ,Func[100:200,],Fac,dfComp) 
+#' head(str(Func))
+#' CC1=CoFRA::completeFunctionalRegulationAnalysis(iBAQ,Func[100:200],Fac,dfComp,NbackGround=142140) 
 #' @export
-completeFunctionalRegulationAnalysis <- function(dfPro,func,Fac,dfComp,NbackGround=142140,DataExtract="FDR",minCounts=10){
-#if (func=="BP"){funcU=BP}
-#if (func=="CC"){funcU=CC}
-#if (func=="MF"){funcU=MF}
+completeFunctionalRegulationAnalysis <- function(dfPro,func,Fac,dfComp,NbackGround=length(unique(unlist(func))),
+DataExtract="FDR",minCounts=10,Test="t.test",no_cores=-1){
+if (is.matrix(dfPro)==T){dfPro=as.data.frame(dfPro);dfPro$pro=rownames(dfPro)}
+if (is.data.frame(dfPro)==F | base::missing(dfPro)){stop("dfPro is expected to be data frame")}
+if (sum(names(dfPro)=="pro")!=1){stop("dfPro needs a column named 'pro' containing UniProt FASTA headers or UniProt accession numbers")}
+if (is.list(func)==F | base::missing(func)){stop("func is expected to be list")}
+if (is.factor(Fac)==F | base::missing(Fac)){stop("Fac is expected to be factor")}
+if (is.data.frame(dfComp)==F | base::missing(dfComp)){stop("dfComp is expected to be data frame")}
+if (is.numeric(NbackGround)==F){stop("NbackGround is expected to be numeric")}
+if (is.character(DataExtract)==F){stop("DataExtract is expected to be character")}
+if (is.character(Test)==F){stop("Test is expected to be character")}
+if (is.numeric(minCounts)==F){stop("minCounts is expected to be numeric")}
+pro=dfPro$pro
+if (stringr::str_count(pro, "\\|")[1]>=2){
+pro=lapply(stringr::str_split(pro,"\\|"),'[[',2)}
+dfPro$pro=pro
+# check mapping
+print(paste(sum(dfPro$pro %in% unique(unlist(func)))/nrow(dfPro)*100,"% of entities could be mapped"))
+#
 funcU=func
 dfComp[,1]=as.character(dfComp[,1])
 dfComp[,2]=as.character(dfComp[,2])
-funcU[,1]=as.character(funcU[,1])
-funcU[,2]=as.character(funcU[,2])
 #
-EF=EnrichmentAnalysisFromDFcompleteAnnotation(dfPro,funcU,Fac,dfComp,NbackGround=NbackGround)
+EF=EnrichmentAnalysisFromDFcompleteAnnotation(dfPro,funcU,Fac,dfComp,NbackGround=NbackGround,no_cores=no_cores)
 EF=MergeDFlist(EF,"Cat",DataExtract)
 #
-Q=TtestAndLogRatiosStatCompare(dfPro,funcU,Fac,dfComp)
+Q=TtestAndLogRatiosStatCompare2(dfPro,funcU,Fac,dfComp,ColNorm=T,Test=Test,no_cores=no_cores)
 Q=filterUpDownPvalue(Q)
 Q=filterDFL(Q,5,minCounts) # matrix 5 for filtering
 #
@@ -453,6 +553,7 @@ Q=CombineMaxCountWithEnrcihmentSignificance(Q)
 res=Q
 res[[length(res)+1]]=EF
 names(res)[length(res)]="Complete enrichment"
+class(res)="CompleteEnrichment"
 return(res)
 }
 
@@ -916,11 +1017,13 @@ graphics::par(lheight=0.8)
 }
 
 
-multiHeatMapRowColAnnoAsMatrix <- function(mat,title="Title",hclustfun=function(c){stats::hclust(c,method="average")},distfun=function(c){stats::dist(c,method="euclidian")},
-rlabL=F,clabL=F,labCol=F,labRow=F,KeyValueName="Prob. Response",LowerMargin=25,RightMargin=5,barTitle="",KeySize=0.9,RowSideColorsSize=0.5,ColSideColorsSize=6,UseBreaks=F,cexFontCol=1,cexRow=1,cellnote="",notecex=1,ColSideCex=1){
-#breaks for the core of the distribution
+multiHeatMapRowColAnnoAsMatrix <- function(mat,title="Title",hclustfun=function(c){stats::hclust(c,method="average")},
+distfun=function(c){stats::dist(c,method="euclidian")},
+rlabL=F,clabL=F,labCol=F,labRow=F,KeyValueName="Prob. Response",LowerMargin=25,RightMargin=5,barTitle="",
+KeySize=0.9,RowSideColorsSize=0.5,ColSideColorsSize=6,UseBreaks=F,cexFontCol=1,cexRow=1,cellnote="",notecex=1,ColSideCex=1){
+# breaks for the core of the distribution
 if (UseBreaks==T){
-breaks=seq(-1, 1, by=0.2) #41 values
+breaks=seq(-1, 1, by=0.2)
 #now add outliers
 breaks=append(breaks, 1)
 breaks=append(breaks, -1, 0)
@@ -950,7 +1053,8 @@ if (cellnote[1]!=""){
 heatmap.3(mat, hclustfun=hclustfun, distfun=distfun, na.rm = TRUE, scale="none", dendrogram="both", margins=c(LowerMargin,RightMargin),
 Rowv=TRUE, Colv=TRUE, ColSideColors=clabL, symbreaks=FALSE, key=TRUE, symkey=FALSE,
 density.info="none", trace="none", main=main_title, labCol=labCol, labRow=labRow, cexRow=cexRow,cexCol=cexFontCol, col=mycol,
-ColSideColorsSize=ColSideColorsSize, RowSideColorsSize=RowSideColorsSize,keysize=KeySize,KeyValueName=KeyValueName,barTitle=barTitle,cellnote=cellnote,notecex=notecex,notecol="white",ColSideCex=ColSideCex)
+ColSideColorsSize=ColSideColorsSize, RowSideColorsSize=RowSideColorsSize,keysize=KeySize,KeyValueName=KeyValueName,barTitle=barTitle,
+cellnote=cellnote,notecex=notecex,notecol="white",ColSideCex=ColSideCex)
 } else {
 heatmap.3(mat, hclustfun=hclustfun, distfun=distfun, na.rm = TRUE, scale="none", dendrogram="both", margins=c(LowerMargin,RightMargin),
 Rowv=TRUE, Colv=TRUE, ColSideColors=clabL, symbreaks=FALSE, key=TRUE, symkey=FALSE,
@@ -973,20 +1077,94 @@ return(TRUE)
 #' dfComp=data.frame(Con=c("MCCT","MT","MC","iN","sN","AllC,MCCT,MT,MC,iN,sN"),Tre=c("MCCTT","MTT",
 #' "MCT","iNT","sNT","AllT,MCCTT,MTT,MCT,iNT,sNT"))
 #' Func=CoFRA::getFunctionalCategories("CC")
-#' str(Func)
-#' CC1=CoFRA::completeFunctionalRegulationAnalysis(iBAQ,Func[100:200,],Fac,dfComp)
+#' head(str(Func))
+#' CC1=CoFRA::completeFunctionalRegulationAnalysis(iBAQ,Func[100:200],Fac,dfComp,NbackGround=142140)
 #' CoFRA::HeatMapEnrichment(CC1,"CC") # note this fails inside R studio because of the way the graphic device is setup use below to write pdf to file if using Rstudio
 #' getwd() # check that the following commands don't overwrite any files
 #' pdf("CCxxxTest.pdf")
 #' CoFRA::HeatMapEnrichment(CC1,"CC")
 #' dev.off()
 #' @export
-HeatMapEnrichment <- function(Eres,title=""){
-cMat=matrix(c("blue","green","blue","red","red","black"),nrow=1,ncol=6) # not used in final implmentation
-#
-multiHeatMapRowColAnnoAsMatrix(t(as.matrix(Eres[[1]])),clabL=as.matrix(Eres[[6]][,]),rlabL=cMat,title=title,labCol=T,labRow=T,KeyValueName="P value and log ratio",LowerMargin=30,RightMargin=7,KeySize=1,ColSideColorsSize=7,cexFontCol=1,cellnote=t(as.matrix(Eres[[8]])))
+HeatMapEnrichment <- function(Eres, title = "") {
+if (class(Eres)!="CompleteEnrichment") {
+stop("Eres is expected to be CompleteEnrichment object calculated by completeFunctionalRegulationAnalysis method")
+}
+if (base::is.character(title)==F) {
+stop("Character expected for title")
+}
+cMat = matrix(c("blue", "green", "blue", "red", "red", "black"), 
+nrow = 1, ncol = 6)  # not used in final implmentation
+# 
+multiHeatMapRowColAnnoAsMatrix(t(as.matrix(Eres[[1]])), clabL = as.matrix(Eres[[6]][, 
+]), rlabL = cMat, title = title, labCol = T, labRow = T, 
+KeyValueName = "P value and log ratio", LowerMargin = 30, 
+RightMargin = 7, KeySize = 1, ColSideColorsSize = 7, 
+cexFontCol = 1, cellnote = t(as.matrix(Eres[[8]])))
 return(TRUE)
 }
 
 
+#' This function plot a heatmap to summarize the results from complete functional enrichment analysis
+#' @param x object from complete functional enrichment analysis
+#' @param ... list of additional arguments
+#' @keywords heatmap
+#' library(CoFRA)
+#' data(iBAQ)
+#' Fac=factor(c("MCCTT","MCCTT","MCCTT","MCCT","MCCT","MCCT","MC","MC","MC","MCT","MCT","MCT","MTT","MTT",
+#' "MTT","MT","MT","MT","sN","sN","sN","sNT","sNT","sNT","iN","iN","iN","iNT","iNT","iNT"))
+#' dfComp=data.frame(Con=c("MCCT","MT","MC","iN","sN","AllC,MCCT,MT,MC,iN,sN"),Tre=c("MCCTT","MTT",
+#' "MCT","iNT","sNT","AllT,MCCTT,MTT,MCT,iNT,sNT"))
+#' Func=CoFRA::getFunctionalCategories("CC")
+#' head(str(Func))
+#' CC1=CoFRA::completeFunctionalRegulationAnalysis(iBAQ,Func[100:200],Fac,dfComp,NbackGround=142140)
+#' CoFRA::HeatMapEnrichment(CC1,"CC") # note this fails inside R studio because of the way the graphic device is setup use below to write pdf to file if using Rstudio
+#' getwd() # check that the following commands don't overwrite any files
+#' pdf("CCxxxTest.pdf")
+#' CoFRA::HeatMapEnrichment(CC1,"CC")
+#' dev.off()
+#' @export
+plot.CompleteEnrichment <- function(x, ...) {
+HeatMapEnrichment(x)
+}
 
+#' This function summarize and print the results from complete functional enrichment analysis
+#' @param object object from complete functional enrichment analysis
+#' @param ... list of additional arguments
+#' @keywords summary
+#' library(CoFRA)
+#' data(iBAQ)
+#' Fac=factor(c("MCCTT","MCCTT","MCCTT","MCCT","MCCT","MCCT","MC","MC","MC","MCT","MCT","MCT","MTT","MTT",
+#' "MTT","MT","MT","MT","sN","sN","sN","sNT","sNT","sNT","iN","iN","iN","iNT","iNT","iNT"))
+#' dfComp=data.frame(Con=c("MCCT","MT","MC","iN","sN","AllC,MCCT,MT,MC,iN,sN"),Tre=c("MCCTT","MTT",
+#' "MCT","iNT","sNT","AllT,MCCTT,MTT,MCT,iNT,sNT"))
+#' Func=CoFRA::getFunctionalCategories("CC")
+#' head(str(Func))
+#' CC1=CoFRA::completeFunctionalRegulationAnalysis(iBAQ,Func[100:200],Fac,dfComp,NbackGround=142140)
+#' summary.CompleteEnrichment(CC1)
+#' @export
+summary.CompleteEnrichment <- function(object, ...){
+Eres=object
+tes=Eres[["P values"]]
+tes2=paste(lapply(tes,function(x){sum(x>0.95)})," out of ",nrow(tes))
+print("Number of significant up-regulated enties")
+print(paste(names(lapply(tes,function(x){sum(x>0.95)})),": ",tes2))
+tes2=paste(lapply(tes,function(x){sum(x< -0.95)})," out of ",nrow(tes))
+print("Number of significant down-regulated enties")
+print(paste(names(lapply(tes,function(x){sum(x< -0.95)})),": ",tes2))
+# Number of print significant enriched entities
+tes=Eres[["Significance of enrichment"]]
+tes2=paste(lapply(tes,function(x){sum(x<0.01)})," out of ",nrow(tes))
+print("Number of significant enriched entities")
+print(paste(names(lapply(tes,function(x){sum(x< 0.01)})),": ",tes2))
+# number of enriched and regulated entities
+tes1=Eres[["P values"]]
+tes11=lapply(tes1,function(x){x>0.95 | x< -0.95})
+tes2=Eres[["Significance of enrichment"]]
+tes21=lapply(tes2,function(x){x<0.01})
+for (i in 1:length(tes21)){
+print(names(tes21[i]))
+for (j in 1:length(tes21[[i]])){
+if (tes21[[i]][j]==T & tes11[[i]][j]==T){print(paste(rownames(tes1)[j],Eres[["Max Counts"]][j,i],Eres[["log ratios"]][j,i]))}
+}
+}
+}

@@ -5,7 +5,8 @@
 \title{This function performs complete functional regulation analysis}
 \usage{
 completeFunctionalRegulationAnalysis(dfPro, func, Fac, dfComp,
-  NbackGround = 142140, DataExtract = "FDR", minCounts = 10)
+  NbackGround = length(unique(unlist(func))), DataExtract = "FDR",
+  minCounts = 10, Test = "t.test", no_cores = -1)
 }
 \arguments{
 \item{dfPro}{data frame with quantitative values}
@@ -21,6 +22,10 @@ completeFunctionalRegulationAnalysis(dfPro, func, Fac, dfComp,
 \item{DataExtract}{string which P value correction to use}
 
 \item{minCounts}{integer minimum number of matching genes for functional category}
+
+\item{Test}{"t.test" or "wilcox.test"}
+
+\item{no_cores}{=-1 (no parelle execution) =0 (number of availble cores -1) >0 (use number of cores)}
 }
 \description{
 This function performs complete functional regulation analysis
@@ -33,8 +38,8 @@ Fac=factor(c("MCCTT","MCCTT","MCCTT","MCCT","MCCT","MCCT","MC","MC","MC","MCT","
 dfComp=data.frame(Con=c("MCCT","MT","MC","iN","sN","AllC,MCCT,MT,MC,iN,sN"),Tre=c("MCCTT","MTT",
 "MCT","iNT","sNT","AllT,MCCTT,MTT,MCT,iNT,sNT"))
 Func=CoFRA::getFunctionalCategories("CC")
-str(Func)
-CC1=CoFRA::completeFunctionalRegulationAnalysis(iBAQ,Func[100:200,],Fac,dfComp) 
+head(str(Func))
+CC1=CoFRA::completeFunctionalRegulationAnalysis(iBAQ,Func[100:200],Fac,dfComp,NbackGround=142140) 
 }
 \keyword{heatmap}
 

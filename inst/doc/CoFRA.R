@@ -14,7 +14,7 @@ dfComp=data.frame(Con=c("MCCT","MT","MC","iN","sN","AllC,MCCT,MT,MC,iN,sN"),Tre=
 ## ----eval=FALSE----------------------------------------------------------
 #  Func=CoFRA::getFunctionalCategories("CC")
 #  str(Func)
-#  CC1=CoFRA::completeFunctionalRegulationAnalysis(iBAQ,Func,Fac,dfComp)
+#  CC1=CoFRA::completeFunctionalRegulationAnalysis(iBAQ,Func,Fac,dfComp,no_cores =-1)
 #  CoFRA::HeatMapEnrichment(CC1,"CC")
 
 ## ----eval=FALSE----------------------------------------------------------
@@ -22,6 +22,10 @@ dfComp=data.frame(Con=c("MCCT","MT","MC","iN","sN","AllC,MCCT,MT,MC,iN,sN"),Tre=
 #  pdf("CC.pdf")
 #  CoFRA::HeatMapEnrichment(CC1,"CC")
 #  dev.off()
+
+## ----eval=FALSE----------------------------------------------------------
+#  plot(CC1)
+#  summary(CC1)
 
 ## ----eval=FALSE----------------------------------------------------------
 #  Func=CoFRA::getFunctionalCategories("MF")

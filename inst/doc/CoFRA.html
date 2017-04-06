@@ -205,12 +205,12 @@ hr {
 
 <h2><em>Ana Sofia Carvalho and Rune Matthiesen</em></h2>
 
-<p>date: 2016-12-24</p>
+<p>date: 2017-04-06</p>
 
 <h2>Introduction</h2>
 
-<p>CoFRA is a simple package for complete functional regulation analysis of large scale quantitative biological data. It combines statistical testing for regulation of functional groups of entities (e.g. using t test) with 
-statistical tests for enrichment of functional groups of entities (e.g. by applying hyper geometric). </p>
+<p>CoFRA is a simple package for complete functional regulation analysis of large scale quantitative biological data. It combines statistical testing for regulation of functional groups of entities (e.g. using t test or Wilcox test) with 
+statistical tests for enrichment of functional groups of entities (e.g. by applying hyper geometric function). </p>
 
 <h2>Dependencies</h2>
 
@@ -221,7 +221,7 @@ statistical tests for enrichment of functional groups of entities (e.g. by apply
 </ul>
 
 <p>The R package CoFRA has been tested using R version 3.2.3 (2015-12-10) &ndash; &ldquo;Wooden Christmas-Tree&rdquo; and R version 3.3.2 (2016-10-31) &ndash; &ldquo;Sincere Pumpkin Patch&rdquo; on windows 7 and Ubuntu. The package has 3 dependencies 
-and mainly R core functions are used so its expected that the package works with most R versions.</p>
+and mainly R core functions are used so it is expected that the package works with most R versions. Version &gt;=1.2 allows use of multiple cores based on the parallel packages.</p>
 
 <h2>Example analysis</h2>
 
@@ -231,8 +231,8 @@ and mainly R core functions are used so its expected that the package works with
 </code></pre>
 
 <p>CoFRA expects a quantitative matrix obtained from large scale biological measurements such as mass spectrometry, micro arrays and next generation sequencing experiments. The current proof of concept version accepts a data frame with a number of
-quantitative values followed by a column named &ldquo;pro&rdquo; which should contain UniProt FASTA headers. We are currently working on a new version of CoFRA with additional user friendly functions and
-flexibility. The data frame may contain any number of additional meta data columns. The code below loads example data from the article referenced in the reference section below.</p>
+quantitative values followed by a column named &ldquo;pro&rdquo; which should contain UniProt FASTA headers or UniProt accession numbers. In CoFRA version &gt;=1.2 a matrix with UniProt FASTAheaders or UniProt accession numbers can be used instead of the data frame.
+The data frame may contain any number of additional meta data columns. The code below loads example data from the article referenced in the reference section below.</p>
 
 <pre><code class="r">data(&quot;iBAQ&quot;)
 str(iBAQ)
@@ -274,7 +274,7 @@ str(iBAQ)
 ##  $ FDR   : num  0 0 0 0 0 ...
 </code></pre>
 
-<p>The columns containing quantitative values maintain the raw file names labels from which the quantitative columns originate. The next step is to define a factor for the quantitative columns
+<p>The columns containing quantitative values maintain the raw file names indicating the origin of quantitative columns. The next step is to define a factor for the quantitative columns
 see reference 1 below for details on the different samples of example data. This version of CoFRA only supports experimental designs with two experimental conditions, any number replicas (&gt;=3) 
 and any number of fractionations. </p>
 
@@ -286,21 +286,30 @@ and any number of fractionations. </p>
 <pre><code class="r">dfComp=data.frame(Con=c(&quot;MCCT&quot;,&quot;MT&quot;,&quot;MC&quot;,&quot;iN&quot;,&quot;sN&quot;,&quot;AllC,MCCT,MT,MC,iN,sN&quot;),Tre=c(&quot;MCCTT&quot;,&quot;MTT&quot;,&quot;MCT&quot;,&quot;iNT&quot;,&quot;sNT&quot;,&quot;AllT,MCCTT,MTT,MCT,iNT,sNT&quot;))
 </code></pre>
 
+<p>Note that if factors are merged then the first string will be the name of the factor and the subsequent string list the factors to be merged.</p>
+
 <p>The statistical calculations are resumed in a single command (see reference 1 below for details on the statistical calculations). The parameter &ldquo;CC&rdquo; is for cellular component.</p>
 
 <pre><code class="r">Func=CoFRA::getFunctionalCategories(&quot;CC&quot;)
 str(Func)
-CC1=CoFRA::completeFunctionalRegulationAnalysis(iBAQ,Func,Fac,dfComp) 
+CC1=CoFRA::completeFunctionalRegulationAnalysis(iBAQ,Func,Fac,dfComp,no_cores =-1) 
 CoFRA::HeatMapEnrichment(CC1,&quot;CC&quot;)
 </code></pre>
 
-<p>The statistical calculations can now be summarized in a single heatmap. &ldquo;CC&rdquo; is for the title of the plot. The plotting works fine from the standard R terminal on Windows and Ubuntu. 
+<p>The statistical calculations can now be summarized in a single heatmap. For no_cores =-1 a single core will be used. no_cores =0 number of availble cores minus one will be used. 
+If no_cores is set higher than one then this number of cores will be used. &ldquo;CC&rdquo; is for the title of the plot. The plotting works fine from the standard R terminal on Windows and Ubuntu. 
 If you are plotting from Rstudio then you will get an error because of the way Rstudio plotting device is setup. Therefore from Rstudio you will need to plot directly to pdf as below.</p>
 
 <pre><code class="r">getwd() # check that the following commands don&#39;t overwrite any files
 pdf(&quot;CC.pdf&quot;)
 CoFRA::HeatMapEnrichment(CC1,&quot;CC&quot;)
 dev.off()
+</code></pre>
+
+<p>You can also use the standard functions plot and summary.</p>
+
+<pre><code class="r">plot(CC1)
+summary(CC1)
 </code></pre>
 
 <p>Similar analysis can be made for &ldquo;MF&rdquo; (molecular function) and &ldquo;BP&rdquo; (biological process). More functional categories will be supported in the future.</p>
